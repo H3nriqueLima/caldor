@@ -128,5 +128,5 @@ match dividir(10, 0) {
 
 | Gap | Por quê continua em aberto |
 |---|---|
-| Trait object / despacho dinâmico (`dyn Trait`) | Não bloqueia `Result`/`Option` (que são enum, não trait), só importa para coleção heterogênea (`Vec<dyn Trait>`), feature própria, não sub-item de outra coisa |
-| Cast entre struct/trait | Depende do item acima estar fechado |
+| Trait object / despacho dinâmico (`dyn Trait`) | Não bloqueia `Result`/`Option` (que são enum, não trait), só importa para coleção heterogênea (`Vec<dyn Trait>`), feature própria. |
+| Cast entre struct/trait | Depende do item acima estar fechado. |
