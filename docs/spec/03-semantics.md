@@ -126,8 +126,6 @@ match dividir(10, 0) {
 
 ## Gaps conhecidos
 
-Sobrou só o que é feature separada de verdade, não sub-item escondido de outra decisão:
-
 | Gap | Por quê continua em aberto |
 |---|---|
 | Trait object / despacho dinâmico (`dyn Trait`) | Não bloqueia `Result`/`Option` (que são enum, não trait), só importa para coleção heterogênea (`Vec<dyn Trait>`), feature própria, não sub-item de outra coisa |
