@@ -1,0 +1,37 @@
+# --- Artefatos de compilação C ---
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+*.out
+
+# --- Diretórios de build ---
+build/
+bin/
+out/
+CMakeFiles/
+CMakeCache.txt
+CMakeUserPresets.json
+
+# --- Visual Studio ---
+.vs/
+*.sln
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.pdb
+*.ilk
+*.idb
+Debug/
+Release/
+x64/
+x86/
+
+# --- Editores ---
+.vscode/
+.idea/
