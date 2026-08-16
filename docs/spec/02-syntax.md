@@ -1,4 +1,4 @@
-# 02 — Syntax
+# Syntax
 
 Gramática formal, como a sequência de tokens do 01-lexical-grammar.md vira AST. Notação EBNF.
 
@@ -51,11 +51,11 @@ type        ::= [ "&" ], IDENT, [ "<", type_list, ">" ], { "[", "]" } ;
 type_list   ::= type, { ",", type } ;
 ```
 
-`impl Struct { ... }` declara método próprio. `impl Trait for Struct { ... }` implementa o contrato do trait para o struct, é onde a decisão de "composição em vez de herança" (fechada no vision-roadmap.md) vira sintaxe concreta.
+`impl Struct { ... }` declara método próprio. `impl Trait for Struct { ... }` implementa o contrato do trait para o struct, é onde "composição em vez de herança" (a decisão está em vision-roadmap.md) vira sintaxe concreta.
 
-`let` é imutável por padrão. `let mut x = 1;` libera reatribuição, `let x = 1;` não (checagem de reatribuição em variável não-`mut` é semântica, `03-semantics.md`, aqui só a gramática permite o `mut` opcional).
+`let` é imutável por padrão. `let mut x = 1;` libera reatribuição, `let x = 1;` não permite. A checagem de reatribuição em variável não-`mut` é semântica (03-semantics.md), aqui a gramática só permite o `mut` opcional.
 
-`type` cobre `&T` (referência), `T[]`/`T[][]` (array, aninhável) e `Nome<T, U>` (instanciação genérica) além do nome simples. `type_params` (`<T: Trait>`, `+` para mais de um bound) só aparece em posição de declaração, nunca em `expression`, por isso não colide com `<`/`>` de comparação, o parser já sabe que tá em modo "tipo", não em modo "expressão", quando chega ali.
+`type` cobre `&T` (referência), `T[]`/`T[][]` (array, aninhável) e `Nome<T, U>` (instanciação genérica) além do nome simples. `type_params` (`<T: Trait>`, `+` para mais de um bound) só aparece em posição de declaração, nunca em `expression`. Por isso não colide com `<`/`>` de comparação: o parser já sabe que está em modo "tipo" quando chega ali, não em modo "expressão".
 
 ## Statements
 
@@ -78,17 +78,17 @@ continue_stmt::= "continue", ";" ;
 block        ::= "{", { declaration }, "}" ;
 ```
 
-`for` é C-style. Inicialização, condição, incremento, não `for x in lista` (esse fica para quando tiver iterador definido na stdlib, sem stdlib ainda não tem o que iterar formalmente).
+`for` é C-style: inicialização, condição, incremento, não `for x in lista`. Isso fica para quando existir iterador definido na stdlib, sem stdlib ainda não tem o que iterar formalmente.
 
-`if` é expression, não statement. Tem valor, o valor do braço executado é o da última expressão do bloco escolhido, sem `;` no fim dela (se tiver `;`, ou o bloco terminar vazio, o valor é `unit`, regra de valor de bloco fica formalizada no 03-semantics.md, aqui é só sintaxe). Aparece tanto solto (posição de `statement`, sem exigir `;` depois do `}`, mesma convenção de bloco de função/struct, que também não levam `;`) quanto dentro de expressão maior via `primary`, para casos como `let x = if (cond) { 1 } else { 2 };`.
+`if` é expression, não statement. Tem valor, o valor do braço executado é o da última expressão do bloco escolhido, sem `;` no fim dela. Se tiver `;`, ou o bloco terminar vazio, o valor é `unit` (a regra de valor de bloco é formalizada no 03-semantics.md, aqui é só sintaxe). Aparece solto, em posição de `statement`, sem exigir `;` depois do `}` (mesma convenção do bloco de função/struct, que também não leva `;`), e também dentro de expressão maior via `primary`, para casos como `let x = if (cond) { 1 } else { 2 };`.
 
-`else` continua opcional na gramática mesmo com `if` sendo expression. `if` sem `else` tem valor `unit`, então só é válido nas posições onde o valor é descartado (statement), usar sem `else` dentro de `let x = if (...) { 1 };` é erro de tipo, não de sintaxe, mesma lógica do `1 = 2` do assignment.
+`else` continua opcional na gramática mesmo com `if` sendo expression. `if` sem `else` tem valor `unit`, então só é válido nas posições onde o valor é descartado (statement). Usar sem `else` dentro de `let x = if (...) { 1 };` é erro de tipo, não de sintaxe.
 
-`while`/`for` continuam statement puro, não produzem valor. Ficaria estranho sem uma feature de `break valor`, que ainda não foi decidida. Combinar as duas decisões junto seria specular além do que já foi fechado.
+`while`/`for` continuam statement puro, não produzem valor. Uma feature de `break valor` deixaria isso menos estranho, mas ainda não foi decidida. Combinar as duas coisas junto seria especular além do que já foi fechado.
 
-## Expressões — precedência
+## Expressões, precedência
 
-Estende direto a cadeia do parser-expressoes (expressão → termo → potência → fator), agora com todos os operadores do 01-lexical-grammar.md encaixados. Ordem abaixo é da menor para maior precedência, cada regra só desce para próxima quando não acha o operador do seu próprio nível:
+Estende direto a cadeia do parser-expressoes (expressão, termo, potência, fator), agora com todos os operadores do 01-lexical-grammar.md encaixados. Ordem abaixo é da menor para maior precedência, cada regra só desce para próxima quando não acha o operador do seu próprio nível:
 
 ```
 assignment      ::= logical_or, [ "=", assignment ] ;
@@ -138,16 +138,16 @@ bind_list       ::= IDENT, { ",", IDENT } ;
 arg_list        ::= expression, { ",", expression } ;
 ```
 
-`power` continua associativo à direita e no mesmo lugar da cadeia, isso não mudou desde o parser-expressoes-infixa. `assignment` é associativo à direita (`a = b = 1` é `a = (b = 1)`), todo o resto é associativo à esquerda.
+`power` continua associativo à direita, no mesmo lugar da cadeia, isso não mudou desde o parser-expressoes-infixa. `assignment` é associativo à direita (`a = b = 1` é `a = (b = 1)`), todo o resto é associativo à esquerda.
 
-Ordem de bit a bit entre comparação e aritmética segue a mesma convenção do C (`|` mais solto que `xor`, que é mais solto que `&`, que é mais solto que shift), não inventei ordem nova, só encaixei os lógicos por palavra reservada no lugar onde `&&`/`||` estariam num C comum.
+A ordem de bit a bit entre comparação e aritmética segue a convenção do C: `|` mais solto que `xor`, que é mais solto que `&`, que é mais solto que shift. Os lógicos por palavra reservada entraram no lugar onde `&&`/`||` estariam num C comum.
 
-`assignment` valida em cima de `logical_or` (não de `primary`) de propósito. O lado esquerdo precisa ser um lvalue válido (identificador, member_access ou index), mas essa checagem é semântica, não sintática, `03-semantics.md` que rejeita.
+`assignment` valida em cima de `logical_or` (não de `primary`) de propósito. O lado esquerdo precisa ser um lvalue válido (identificador, member_access ou index), essa checagem é semântica, não sintática, quem rejeita é o 03-semantics.md.
 
-`unary` ganhou `&`/`*`, mesma reaproveitada do bit a bit, resolvida por posição (`01-lexical-grammar.md`). `cast` fica entre `unary` e `postfix`: `-x as float` é `-(x as float)`, `x.campo as int` é `(x.campo) as int`.
+`unary` ganhou `&`/`*`, reaproveitados do bit a bit e resolvidos por posição (01-lexical-grammar.md). `cast` fica entre `unary` e `postfix`: `-x as float` é `-(x as float)`, `x.campo as int` é `(x.campo) as int`.
 
-`call`/`member_access`/indexação viraram um `postfix` só, encadeável (`foo().bar[0].baz()` é uma sequência de sufixos em cima do mesmo `primary`), mais fiel de como parser recursivo descendente resolve isso na prática do que três regras soltas.
+`call`/`member_access`/indexação viraram um `postfix` só, encadeável (`foo().bar[0].baz()` é uma sequência de sufixos em cima do mesmo `primary`). É mais fiel a como um parser recursivo descendente resolve isso na prática do que três regras soltas.
 
-`struct_literal` cria uma ambiguidade real, `if (Ponto { x: 1 } == p)`, o parser não sabe se `{` é literal de struct ou abertura do bloco do `if`. Resolvida do mesmo jeito que o Rust resolve, literal de struct cru não é permitido direto na condição de `if`/`while`/`for` sem parêntese, `if ((Ponto { x: 1 }) == p)` funciona, sem os parênteses extras é erro de sintaxe.
+`struct_literal` cria uma ambiguidade real em `if (Ponto { x: 1 } == p)`: o parser não sabe se `{` é literal de struct ou abertura do bloco do `if`. Resolvida como o Rust resolve, literal de struct cru não é permitido direto na condição de `if`/`while`/`for` sem parêntese. `if ((Ponto { x: 1 }) == p)` funciona, sem os parênteses extras é erro de sintaxe.
 
-`match` é expression igual `if`, o valor é o do braço escolhido. `pattern ::= IDENT` sozinho cobre dois casos ao mesmo tempo, se o identificador bate com o nome de uma variante sem dado (`None`), casa por igualdade; senão, é binding, captura qualquer valor e dá nome a ele (inclusive `_`, que por convenção captura e descarta, já que `_` é identificador válido desde o 01-lexical-grammar.md). Exaustividade (cobrir toda variante do enum, ou ter um braço `_`) é checagem semântica, 03-semantics.md, a gramática aceita `match` incompleto, quem rejeita é o type checker.
+`match` é expression igual `if`, o valor é o do braço escolhido. `pattern ::= IDENT` sozinho cobre dois casos: se o identificador bate com o nome de uma variante sem dado (`None`), casa por igualdade; senão é binding, captura qualquer valor e dá nome a ele (inclusive `_`, que por convenção captura e descarta, já que `_` é identificador válido desde o 01-lexical-grammar.md). Exaustividade, cobrir toda variante do enum ou ter um braço `_`, é checagem semântica (03-semantics.md), a gramática aceita `match` incompleto, quem rejeita é o type checker.
