@@ -71,7 +71,7 @@ Cast entre struct/trait não decididom depende do despacho de trait (abaixo), qu
 
 `Nome { campo: valor, ... }` cria uma instância, todo campo do `struct_decl` precisa aparecer no literal, em qualquer ordem (não posicional). Faltar campo é erro de compilação, não valor default silencioso.
 
-Despacho de método de trait é **estático** por padrão, resolvido em compile-time, sem vtable. Isso significa que hoje um trait só serve como restrição em `impl` (`impl Trait for Struct`), não como tipo de variável (`let x: MeuTrait = ...` não existe ainda), trait object com despacho dinâmico fica para o roadmap item 4, junto de genéricos, porque as duas coisas normalmente andam juntas (`Vec<dyn Trait>` etc.).
+Despacho de método de trait é **estático** por padrão, resolvido em tempo de compilação, sem vtable. Isso significa que hoje um trait só serve como restrição em `impl` (`impl Trait for Struct`), não como tipo de variável (`let x: MeuTrait = ...` não existe ainda), trait object com despacho dinâmico fica para o roadmap item 4, junto de genéricos, porque as duas coisas normalmente andam juntas (`Vec<dyn Trait>` etc.).
 
 ## Array
 

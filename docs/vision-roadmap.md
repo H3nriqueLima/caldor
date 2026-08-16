@@ -34,7 +34,7 @@ Registro do que já foi decidido, mais o que ainda falta fechar:
 | Genéricos | Type params `<T: Trait>` em fn/struct/trait/enum, sempre inferido (nunca explícito na chamada), monomorfização. | Sem argumento explícito em posição de expressão, `<`/`>` de genérico nunca colide com comparação, parser já sabe que tá em modo tipo. | Definido |
 | Enum / tipo soma | `enum Nome<T> { Variante(T), ... }`, construção `Nome.Variante(args)`. | Necessário para `Result`/`Option` existirem, não dá para representar "ou uma coisa ou outra, com dado dentro" só com struct. | Definido |
 | Pattern matching | `match` como expression, exaustivo (cobre toda variante ou tem `_`). | Sem isso, enum existiria mas o dado de dentro da variante seria inacessível, falha exaustiva vira erro de compilação, não passa quieto. | Definido |
-| Despacho de trait | Estático por padrão (resolvido em compile-time). | Despacho dinâmico (vtable/`dyn Trait`) só importa para coleção heterogênea, feature própria, não bloqueia nada do resto. | Definido (estático) / dinâmico em aberto |
+| Despacho de trait | Estático por padrão (resolvido em tempo de compilação). | Despacho dinâmico (vtable/`dyn Trait`) só importa para coleção heterogênea, feature própria, não bloqueia nada do resto. | Definido (estático) / dinâmico em aberto |
 | Tratamento de erros | `Result<T, E>`/`Option<T>`, enum embutido do compilador, sem exceção. | Exceção é fluxo de controle escondido (`throw` pula não-localmente), contradiz o princípio de controle explícito. | Definido |
 | Backend nativo | LLVM | Caminho avançado depois do bytecode+VM já rodando de verdade, não bloqueia o roadmap principal. | Planejado |
 
