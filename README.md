@@ -1,4 +1,4 @@
-# Caldor
+# CaldOR
 Linguagem de programação própria, em desenvolvimento.
 
 ## O que é?
