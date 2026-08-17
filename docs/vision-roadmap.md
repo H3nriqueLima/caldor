@@ -51,6 +51,8 @@ Diferente da tabela acima, essas são sobre o interpretador/compilador em C, a f
 | Decisão | Escolha | Por quê |
 |---|---|---|
 | Propagação de erro no interpretador (C) | Valor sentinela (tipo `Result` em C), função de avaliação devolve resultado normal ou erro, cada chamada checa e propaga. Macro (`TRY(...)`) reduz o boilerplate de checagem repetida. | `longjmp` pula sem rodar `free()` no caminho, vaza memória bem na peça que devia ser exemplo de controle explícito. E é fluxo de controle escondido, mesmo motivo que já descartou exceção na linguagem (tabela acima), usar `longjmp` para implementar o interpretador contradiria essa decisão só que por baixo dos panos, sem ninguém perceber. |
+| `return`/`break`/`continue` fora de contexto válido | Erro de runtime detectado pelo interpretador, temporário (migra para erro de compilação (análise estática) quando o item 2 do roadmap (sistema de tipos) existir). | Não tem type checker ainda para barrar isso antes de rodar. Não é decisão definitiva, é o que dá para fazer na Fase 1 sem o item 2 pronto. Registrar aqui evita esquecer de migrar depois. |
+| Ambiente de escopo (`Environment`) na implementação | Opaco, escondido inteiro dentro de `interpreter.c`, não aparece no header público. | Ninguém fora do interpretador precisa mexer nele. |
 
 ### Roadmap de implementação
 
