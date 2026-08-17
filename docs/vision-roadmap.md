@@ -44,6 +44,14 @@ Mid-level: ponteiros/referências explícitas, controle de alocação, talvez in
 
 High-level: stdlib rica (strings, coleções, I/O, rede), GC opcional, sintaxe mais permissiva. High-level de verdade sempre vai precisar de libs externas (JSON, HTTP), nenhuma linguagem reimplementa tudo, a diferença é oferecer FFI e sistema de módulos para isso ser possível.
 
+### Decisões de implementação
+ 
+Diferente da tabela acima, essas são sobre o interpretador/compilador em C, a ferramenta que roda o CaldOR, não sobre a linguagem em si. Não vão para `docs/spec/` porque não descrevem sintaxe nem semântica do CaldOR.
+ 
+| Decisão | Escolha | Por quê |
+|---|---|---|
+| Propagação de erro no interpretador (C) | Valor sentinela (tipo `Result` em C), função de avaliação devolve resultado normal ou erro, cada chamada checa e propaga. Macro (`TRY(...)`) reduz o boilerplate de checagem repetida. | `longjmp` pula sem rodar `free()` no caminho, vaza memória bem na peça que devia ser exemplo de controle explícito. E é fluxo de controle escondido, mesmo motivo que já descartou exceção na linguagem (tabela acima), usar `longjmp` para implementar o interpretador contradiria essa decisão só que por baixo dos panos, sem ninguém perceber. |
+
 ### Roadmap de implementação
 
 Sequência direta a partir do parser de expressões já feito:
