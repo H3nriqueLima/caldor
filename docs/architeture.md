@@ -98,7 +98,7 @@ typedef enum {
 
 Motivo (ver tabela de decisões abaixo): mantém `ast.h` sem depender de `token.h`, e evita a AST carregar token de pontuação/palavra reservada que nunca vira operador de nó nenhum.
 
-3. Protótipo das construtoras -> Uma função por kind (`ast_new_...`), o parser chama em vez de montar a struct na mão:
+3. Protótipo dos constructors -> Uma função por kind (`ast_new_...`), o parser chama em vez de montar a struct na mão:
 
 ```c
 AstNode* ast_new_literal_int(int line, long long value);
@@ -128,13 +128,13 @@ void ast_destroy(AstNode* node);
 void ast_print(const AstNode* node, int depth);
 ```
  
-`line` primeiro em toda construtora. Preenche o campo `line` da struct. Parâmetro `AstNode*` que pode ser `NULL` não aparece marcado no tipo (C não tem isso), precisa de comentário/doc separado: `else_block` de `ast_new_if`, `value` de `ast_new_return`, `type_name` de `ast_new_let_decl` são os três casos disso nessa lista. Parâmetro de string recebido é `const char*` (só leitura, a construtora copia para dentro), mas o campo salvo na struct é `char*` sem `const`, é a cópia própria do nó, sujeita a ser liberada depois pelo destruidor.
+`line` primeiro em toda constructor. Preenche o campo `line` da struct. Parâmetro `AstNode*` que pode ser `NULL` não aparece marcado no tipo (C não tem isso), precisa de comentário/doc separado: `else_block` de `ast_new_if`, `value` de `ast_new_return`, `type_name` de `ast_new_let_decl` são os três casos disso nessa lista. Parâmetro de string recebido é `const char*` (só leitura, a construtora copia para dentro), mas o campo salvo na struct é `char*` sem `const`, é a cópia própria do nó, sujeita a ser liberada depois pelo destructor.
 
 ### ast.c — fábrica
 
-1. Construtoras -> Cada uma aloca, seta o `kind` certo, preenche os campos daquele kind, devolve o ponteiro. Uma função por kind evita o bug clássico de esquecer de preencher campo ao montar struct na mão.
+1. Constructors -> Cada uma aloca, seta o `kind` certo, preenche os campos daquele kind, devolve o ponteiro. Uma função por kind evita o bug clássico de esquecer de preencher campo ao montar struct na mão.
 
-2. Destruidor recursivo -> Desce a árvore até a folha, libera filho primeiro, depois o próprio nó. É onde a decisão de memória manual do `vision-roadmap.md` vira código de verdade. Sem GC automático nessa fase, esse destruidor é quem libera.
+2. Destructor recursivo -> Desce a árvore até a folha, libera filho primeiro, depois o próprio nó. É onde a decisão de memória manual do `vision-roadmap.md` vira código de verdade. Sem GC automático nessa fase, esse destruidor é quem libera.
 
 3. Pretty-print -> Anda a árvore imprimindo cada nó indentado por profundidade. Permite testar o parser isolado, sem interpretador nenhum (roda o parser, imprime, confere se a forma bate com o esperado. Antes de qualquer coisa rodar de verdade).
 
@@ -143,4 +143,4 @@ void ast_print(const AstNode* node, int depth);
 | Decisão | Escolha | Por quê |
 |---|---|---|
 | Lista de filhos de tamanho variável (statements de um bloco, parâmetros de `fn`, argumentos de chamada) | Reaproveita a `LinkedList` da minha libcds em vez de escrever tipo de lista novo para AST. | Já guarda `void*`, já testada. Não faz sentido duplicar. |
-| Posse de string (nome de identificador, conteúdo de literal string) | Nó guarda cópia própria da string, alocada no momento da construção, não ponteiro para o texto original do código-fonte. | Consequência direta -> o destruidor recursivo também libera essas strings, não só os nós filhos (sem isso vazaria toda string alocada durante o parsing). |
+| Posse de string (nome de identificador, conteúdo de literal string) | Nó guarda cópia própria da string, alocada no momento da construção, não ponteiro para o texto original do código-fonte. | Consequência direta -> o destructor recursivo também libera essas strings, não só os nós filhos (sem isso vazaria toda string alocada durante o parsing). |

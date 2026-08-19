@@ -72,6 +72,15 @@ struct AstNode {
 	} as;
 };
 
+// fn_decl.params guarda uma lista disso (parâmetro não é AstNode - não é expressão), só nome + tipo, então não cabe em nenhum kind do enum acima.
+typedef struct {
+	char* name;
+	char* type_name;
+} AstParam;
+
+AstParam* ast_param_create(const char* name, const char* type_name);
+void ast_param_destroy(AstParam* param);
+
 // Todas recebem line primeiro para preencher o campo acima. Parâmetro de string é const char* (só leitura), o nó guarda cópia própria dela.
 AstNode* ast_new_literal_int(int line, long long value);
 AstNode* ast_new_literal_float(int line, double value);
@@ -85,7 +94,7 @@ AstNode* ast_new_unary_op(int line, UnOp op, AstNode* operand);
 AstNode* ast_new_assignment(int line, AstNode* target, AstNode* value);
 
 AstNode* ast_new_if(int line, AstNode* condition, AstNode* then_block, AstNode* else_block);
-AstNode* ast_new_while(int line, AstNode* condition, AstNode* value);
+AstNode* ast_new_while(int line, AstNode* condition, AstNode* body);
 AstNode* ast_new_for(int line, AstNode* init, AstNode* condition, AstNode* increment, AstNode* body);
 AstNode* ast_new_block(int line, LinkedList* statements);
 
