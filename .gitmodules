@@ -1,0 +1,3 @@
+[submodule "external/libcds"]
+	path = external/libcds
+	url = https://github.com/H3nriqueLima/libcds.git
