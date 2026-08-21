@@ -44,7 +44,7 @@ typedef enum {
 } AstKind;
 ```
 
-  `struct`/`enum`/`match`/genérico/array/referência ficam de fora, são item 3/4 do roadmap, não existem ainda nessa árvore. Os 4 literais são separados (não um `AST_LITERAL` genérico) porque cada um guarda um valor de C diferente por baixo. Juntar todos exigiria um campo a mais só pra saber qual dos quatro é, informação que o enum já dá de graça. `AST_IF` é um kind só, usado tanto em posição de statement quanto de expression, o nó não muda, só o contexto onde ele aparece na árvore (02-syntax.md já trata os dois usos como a mesma construção).
+  `struct`/`enum`/`match`/genérico/array/referência ficam de fora, são item 3/4 do roadmap, não existem ainda nessa árvore. Os 4 literais são separados (não um `AST_LITERAL` genérico) porque cada um guarda um valor de C diferente por baixo. Juntar todos exigiria um campo a mais só para saber qual dos quatro é, informação que o enum já dá de graça. `AST_IF` é um kind só, usado tanto em posição de statement quanto de expression, o nó não muda, só o contexto onde ele aparece na árvore (02-syntax.md já trata os dois usos como a mesma construção).
 
 2. Struct do nó -> Campo `kind` + `line` (linha do código-fonte, para mensagem de erro) + um `union` que muda de formato dependendo do kind:
 ```c
@@ -132,11 +132,29 @@ void ast_print(const AstNode* node, int depth);
 
 ### ast.c — fábrica
 
-1. Constructors -> Cada uma aloca, seta o `kind` certo, preenche os campos daquele kind, devolve o ponteiro. Uma função por kind evita o bug clássico de esquecer de preencher campo ao montar struct na mão.
+1. Constructors -> Uma por kind, seguindo o mesmo padrão sempre: aloca `sizeof(AstNode)`, se `malloc` falhar devolve `NULL` direto (mesma convenção da libcds, `ll_create` também devolve `NULL` se malloc falhar, não trata isso como erro fatal escondido), senão seta `kind`, `line` e os campos daquele kind específico.
+ 
+Cópia de string usa uma função própria, `dup_string` (`malloc` + `memcpy`). Construtora que copia string e a cópia falha (`dup_string` devolve `NULL` por `malloc` ter falhado) libera o que já tinha sido alocado antes de devolver `NULL`, não deixa nó pela metade solto.
+ 
+Apareceu uma peça que não tava prevista na teoria original, `fn_decl.params` guarda parâmetro (nome + tipo), que não é `AstNode`, não é expressão, não tem "kind". Precisou de um tipo à parte:
 
-2. Destructor recursivo -> Desce a árvore até a folha, libera filho primeiro, depois o próprio nó. É onde a decisão de memória manual do `vision-roadmap.md` vira código de verdade. Sem GC automático nessa fase, esse destruidor é quem libera.
+```c
+typedef struct {
+    char* name;
+    char* type_name;
+} AstParam;
+ 
+AstParam* ast_param_create(const char* name, const char* type_name);
+void ast_param_destroy(AstParam* param);
+```
 
-3. Pretty-print -> Anda a árvore imprimindo cada nó indentado por profundidade. Permite testar o parser isolado, sem interpretador nenhum (roda o parser, imprime, confere se a forma bate com o esperado. Antes de qualquer coisa rodar de verdade).
+Segue a mesma regra de posse de string que o resto, `ast_param_create` copia, `ast_param_destroy` libera.
+
+2. Destructor recursivo -> `switch (node->kind)`, cada caso libera o que aquele kind especificamente possui: string copiada (`AST_LITERAL_STRING`/`AST_IDENTIFIER`/nome de `let`/`fn`/`call`), filho via chamada recursiva de `ast_destroy`, ou lista via `ll_destroy_with_values` da libcds passando `ast_destroy`/`ast_param_destroy` como função de liberar cada valor, evita escrever um loop manual para cada lista (`block.statements`, `fn_decl.params`, `call.args`). `ast_destroy(NULL)` não faz nada (checagem logo na entrada da função), o que cobre de graça os campos opcionais (`else_block` de `if` sem `else`, `value` de `return` sem valor).
+ 
+`switch` não tem `default` de propósito, se um kind novo entrar no enum e alguém esquecer de tratar aqui, o compilador (`-Wswitch`) avisa que faltou caso. Um `default` silenciaria esse aviso.
+
+3. Pretty-print -> `ast_print` recursivo, indentado por profundidade. Mesma lógica do destructor, mas imprimindo em vez de liberar. Para percorrer lista (`block.statements`, `fn_decl.params`, `call.args`) sem remover nada dela, usa `ll_for_each` da libcds com um contexto pequeno (`{ int depth; }`) empacotando a profundidade, já que o callback de `ll_for_each` só recebe `(valor, context)`.
 
 ### Decisões já fechadas
 
@@ -144,3 +162,33 @@ void ast_print(const AstNode* node, int depth);
 |---|---|---|
 | Lista de filhos de tamanho variável (statements de um bloco, parâmetros de `fn`, argumentos de chamada) | Reaproveita a `LinkedList` da minha libcds em vez de escrever tipo de lista novo para AST. | Já guarda `void*`, já testada. Não faz sentido duplicar. |
 | Posse de string (nome de identificador, conteúdo de literal string) | Nó guarda cópia própria da string, alocada no momento da construção, não ponteiro para o texto original do código-fonte. | Consequência direta -> o destructor recursivo também libera essas strings, não só os nós filhos (sem isso vazaria toda string alocada durante o parsing). |
+| Operador de nó (`BinOp`/`UnOp`) desacoplado de `TokenType` do lexer | Enum próprio da AST em vez de reusar `TokenType`. Quem traduz token para operador é o parser, no momento de montar o nó. | `ast.h` fica sem depender de `token.h`, mantém a ordem de implementação (`ast.h` antes do lexer) válida. Evita a AST carregar token que nunca vira operador (`TOKEN_SEMICOLON`, palavra reservada de declaração, etc). |
+| Parâmetro de função (`fn_decl.params`) | Tipo próprio `AstParam` (nome + tipo), não `AstNode`. | Parâmetro não é expressão, não tem "kind", só apareceu como gap ao escrever `ast.c` de verdade, não fazia parte da teoria original do `ast.h`. |
+
+## token.h / token.c
+ 
+Peça seguinte do front-end, entre o texto fonte e o parser.
+ 
+### token.h — a forma
+ 
+Enum `TokenType` -> diferente do `AstKind`, cobre o 01-lexical-grammar.md inteiro de uma vez, não só o item 1 do roadmap. Reconhecer um token não exige saber tratar ele depois, o lexer devolve o token de `struct`/`enum`/`match` mesmo sem o parser ainda saber o que fazer com isso. Quem decide "não trato isso ainda" é o parser, mais adiante. Cobrir tudo agora evita voltar no lexer a cada item novo do roadmap.
+ 
+Dois token especiais além dos óbvios (palavra reservada, operador, literal): `TOKEN_EOF` (fim do texto, sem isso o parser não sabe quando parar de pedir token) e `TOKEN_ERROR` (caractere que não bate com regra nenhuma, tipo `@` solto. Vira token de erro em vez de travar o programa).
+ 
+Struct `Token` -> `type`, `line`, e o lexema (o pedaço de texto reconhecido). Token guarda cópia própria do lexema, mesma lógica de posse de string do `ast.h`. Evita lidar com ponteiro para dentro do buffer do arquivo original depois que ele já não existe mais. Literal numérico (`int`/`float`) já sai do lexer convertido para valor de verdade, não como texto. O lexer já andou dígito por dígito reconhecendo o padrão, não faz sentido o parser refazer esse trabalho.
+ 
+### token.c — construção e debug
+ 
+`token_create` -> uma função só, não uma por tipo de token (diferente do `ast.c`): a diferença de formato entre os tipos de token é pequena (só o valor numérico muda em alguns casos), não justifica uma construtora por tipo.
+ 
+Destructor -> só libera o lexema copiado. Não libera o `Token` em si, porque ele nunca é alocado no heap. É valor pequeno, devolvido por cópia de função (`lexer_next_token`), não por ponteiro.
+ 
+`token_type_to_string` -> mesmo papel do `binop_to_string`/`unop_to_string` do `ast.c`, útil para mensagem de erro do parser mais adiante.
+ 
+### Decisões já fechadas
+ 
+| Decisão | Escolha | Por quê |
+|---|---|---|
+| Posse do lexema | `Token` guarda cópia própria (aloca e copia), não ponteiro para o texto original do arquivo fonte. | Parser converte token em nó de AST e descarta o token logo em seguida, não precisa se preocupar se o buffer do arquivo original ainda existe. Custa uma alocação a mais por token, evita lidar com substring sem terminador nulo apontando para o meio do arquivo. |
+| Lexer sob demanda, não lista pronta | `lexer_next_token` devolve um token de cada vez, quando o parser pede, não gera lista completa de token antes de começar a parsear. | Mesmo jeito que o parser-expressoes-infixa já funciona na prática (parser recursivo descendente pedindo o próximo símbolo conforme precisa). `Token` fica valor pequeno, sem `malloc` para o token em si, só para o lexema de dentro dele. |
+ 

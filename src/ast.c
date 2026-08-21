@@ -4,7 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Dono da cópia é sempre o nó (ou o AstParam) que chamou isso, nunca quem passou o ponteiro original.
+/*
+dup_string -> aloca espaço novo e copia o texto para dentro.
+dup_string(NULL) devolve NULL direto, sem tentar alocar nada. Isso é usado de propósito em vários lugares abaixo 
+para tratar campo opcional (tipo type_name de let_decl) sem precisar de if separado toda vez 
+(só chama dup_string mesmo achando que pode ser NULL).
+*/
 static char* dup_string(const char* s) {
 	if (!s) return NULL;
 
@@ -15,7 +20,16 @@ static char* dup_string(const char* s) {
 	return copy;
 }
 
-// Constructors.
+/*
+Constructors.
+
+Padrão repetido em todas: 
+aloca sizeof(AstNode) com malloc, se falhar devolve NULL na hora 
+(mesma convenção da libcds -> ll_create também devolve NULL se malloc falhar). 
+Se não falhar, seta kind, line, e os campos daquele kind específico. 
+Se algum campo precisar copiar string e essa cópia falhar (malloc sem memória), 
+libera tudo que já tinha sido alocado antes de devolver NULL (não deixa nó pela metade solto por aí).
+*/
 
 AstNode* ast_new_literal_int(int line, long long value) {
 	AstNode* node = malloc(sizeof(AstNode));
@@ -61,7 +75,7 @@ AstNode* ast_new_literal_string(int line, const char* value) {
 		free(node);
 
 		return NULL;
-	}
+	} // dup falhou, desiste do nó inteiro.
 
 	return node;
 }
@@ -72,7 +86,7 @@ AstNode* ast_new_identifier(int line, const char* name) {
 
 	node->kind = AST_IDENTIFIER;
 	node->line = line;
-	node->as.string_value = dup_string(name);
+	node->as.string_value = dup_string(name); // mesmo campo union que literal string, kind diferente é quem separa o significado.
 	if (!node->as.string_value) {
 		free(node);
 
@@ -164,7 +178,7 @@ AstNode* ast_new_block(int line, LinkedList* statements) {
 
 	node->kind = AST_BLOCK;
 	node->line = line;
-	node->as.block.statements = statements;
+	node->as.block.statements = statements; // nó passa a ser dono dessa lista, ast_destroy libera ela junto.
 
 	return node;
 }
@@ -183,7 +197,12 @@ AstNode* ast_new_let_decl(int line, const char* name, const char* type_name, boo
 		return NULL;
 	}
 
-	node->as.let_decl.type_name = dup_string(type_name); // dup_string(NULL) já devolve NULLm cobre "tipo inferido".
+	/*
+	type_name pode legitimamente ser NULL (tipo inferido). dup_string(NULL) já devolve NULL sozinho, 
+	então não precisa de if separado aqui. O if abaixo só existe para diferenciar "type_name era NULL de propósito" 
+	de "type_name não era NULL mas a cópia falhou por falta de memória".
+	*/
+	node->as.let_decl.type_name = dup_string(type_name);
 	if (type_name && !node->as.let_decl.type_name) {
 		free(node->as.let_decl.name);
 		free(node);
@@ -219,7 +238,7 @@ AstNode* ast_new_fn_decl(int line, const char* name, LinkedList* params, const c
 		return NULL;
 	}
 
-	node->as.fn_decl.params = params;
+	node->as.fn_decl.params = params; // lista de AstParam*, nó vira dono dela.
 	node->as.fn_decl.body = body;
 
 	return node;
@@ -239,7 +258,7 @@ AstNode* ast_new_call(int line, const char* callee_name, LinkedList* args) {
 		return NULL; 
 	}
 
-	node->as.call.args = args;
+	node->as.call.args = args; // lista de AstNode* (expressões), nó vira dono dela.
 
 	return node;
 }
@@ -250,7 +269,7 @@ AstNode* ast_new_return(int line, AstNode* value) {
 
 	node->kind = AST_RETURN;
 	node->line = line;
-	node->as.return_stmt.value = value;
+	node->as.return_stmt.value = value; // NULL aqui = "return;" sem valor nenhum.
 
 	return node;
 }
@@ -261,7 +280,7 @@ AstNode* ast_new_break(int line) {
 
 	node->kind = AST_BREAK;
 	node->line = line;
-
+	// nada para preencher no union, AST_BREAK não guarda dado nenhum.
 	return node;
 }
 
@@ -275,6 +294,10 @@ AstNode* ast_new_continue(int line) {
 	return node;
 }
 
+/*
+AstParam não é AstNode (não é expressão, não tem kind), por isso tem sua própria constructor/destructor separados aqui embaixo,
+seguindo exatamente a mesma lógica de posse de string que as constructors acima.
+*/
 AstParam* ast_param_create(const char* name, const char* type_name) {
 	AstParam* param = malloc(sizeof(AstParam));
 	if (!param) return NULL;
@@ -301,11 +324,25 @@ void ast_param_destroy(AstParam* param) {
 	if (!param) return;
 
 	free(param->name);
-	free(param->type_name);
+	free(param->type_name); // free(NULL) não faz nada, cobre o caso sem anotação de tipo.
 	free(param);
 }
 
-// Destructors.
+/* 
+Destructor recursivo.
+
+ast_destroy(NULL) não faz nada -> é a primeira linha da função. 
+Isso é o que permite chamar ast_destroy em qualquer campo opcional (tipo if_expr.else_block quando o if não tem else) 
+sem precisar checar "é NULL?" antes de cada chamada, a própria função já checa.
+
+O switch percorre cada kind e libera exatamente o que aquele kind específico possui -> string copiada, 
+nó filho (via chamada recursiva de ast_destroy nele mesmo), ou lista (via ll_destroy_with_values da libcds, 
+que já sabe percorrer a lista toda chamando uma função de liberar em cada valor guardado, evita escrever esse loop na mão).
+
+Repara que o switch NÃO tem "default:". Isso é de propósito -> se um kind novo for adicionado no enum AstKind e essa função
+esquecer de tratar ele aqui, o compilador (com -Wswitch ligado) avisa que faltou um case. Um "default:" silenciaria esse aviso,
+então não tem.
+*/
 
 void ast_destroy(AstNode* node) {
 	if (!node) return;
@@ -356,6 +393,11 @@ void ast_destroy(AstNode* node) {
 			break;
 
 		case AST_BLOCK:
+			/*
+			cada elemento da lista é AstNode*, então ast_destroy serve direto como "função de liberar cada valor" 
+			que ll_destroy_with_values pede. O cast pra LLFreeValueFn é necessário porque o tipo do ponteiro de função não 
+			bate 100% (void (*)(AstNode*) vs void (*)(void*)), mas na prática funciona igual.
+			*/
 			if (node->as.block.statements) {
 				ll_destroy_with_values(node->as.block.statements, (LLFreeValueFn)ast_destroy);
 			}
@@ -363,14 +405,15 @@ void ast_destroy(AstNode* node) {
 
 		case AST_LET_DECL:
 			free(node->as.let_decl.name);
-			free(node->as.let_decl.type_name); // free(NULL) é no-op, cobre "sem anotação".
+			free(node->as.let_decl.type_name); // free(NULL) é no-op, cobre "tipo inferido, sem anotação".
 			ast_destroy(node->as.let_decl.value);
 			break;
 
 		case AST_FN_DECL:
 			free(node->as.fn_decl.name);
-			free(node->as.fn_decl.return_type);
+			free(node->as.fn_decl.return_type); // free(NULL) cobre "sem -> tipo, retorna unit".
 			if (node->as.fn_decl.params) {
+				// aqui cada elemento é AstParam*, não AstNode*, por isso a função de liberar é ast_param_destroy, não ast_destroy.
 				ll_destroy_with_values(node->as.fn_decl.params, (LLFreeValueFn)ast_param_destroy);
 			}
 			ast_destroy(node->as.fn_decl.body);
@@ -388,10 +431,16 @@ void ast_destroy(AstNode* node) {
 			break;
 	}
 
-	free(node);
+	free(node); // libera o próprio node por último, depois de já ter liberado tudo o que ele guardava dentro.
 }
 
-// Pretty-print.
+/*
+Pretty-print.
+
+Imprime a árvore inteira no stdout, indentada por profundidade -> cada nível de aninhamento ganha mais dois espaços na frente.
+Serve para testar o parser sozinho -> roda o parser, chama ast_print na árvore que saiu, olha se bate com o esperado, 
+sem precisar de interpretador nenhum rodando ainda.
+*/ 
 
 static void print_indent(int depth) {
 	for (int i = 0; i < depth; i++) {
@@ -399,6 +448,10 @@ static void print_indent(int depth) {
 	}
 }
 
+/*
+Traduz o enum BinOp/UnOp para texto legível na hora de imprimir -> sem isso ast_print mostraria só o número interno do 
+enum (tipo "3" em vez de "+"), o que não ajuda em nada a debugar.
+*/
 static const char* binop_to_string(BinOp op) {
 	switch (op) {
 		case OP_ADD: return "+";
@@ -422,7 +475,7 @@ static const char* binop_to_string(BinOp op) {
 		case OP_SHR: return ">>";
 	}
 
-	return "?";
+	return "?"; // nunca deveria chegar aqui se todo BinOp foi coberto acima.
 }
 
 static const char* unop_to_string(UnOp op) {
@@ -435,16 +488,28 @@ static const char* unop_to_string(UnOp op) {
 	return "?";
 }
 
-// Contexto para o ll_for_each. Callback só recebe (valor, context), depth precisa vir empacotado.
+/*
+ll_for_each (da libcds) só passa (valor, context) para o callback, não tem como passar "depth" direto como parâmetro extra. 
+Por isso essa struct pequena existe, empacota o depth dentro de um void* para poder viajar através do ll_for_each até dentro 
+do callback.
+*/
 typedef struct {
 	int depth;
 } PrintCtx;
 
+/*
+Callback usado tanto para imprimir statements de um block quanto args de uma call, os dois casos são "lista de AstNode*", 
+mesmo formato.
+*/
 static void print_stmt_cb(void* value, void* context) {
 	PrintCtx* ctx = context;
 	ast_print((AstNode*)value, ctx->depth);
 }
 
+/*
+callback separado para imprimir parâmetro de função, porque o valor aqui é AstParam* (nome + tipo), não AstNode* 
+(formato diferente do de cima, não dá para reaproveitar print_stmt_cb).
+*/
 static void print_param_cb(void* value, void* context) {
 	AstParam* param = value;
 	PrintCtx* ctx = context;
