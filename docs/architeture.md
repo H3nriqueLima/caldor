@@ -192,3 +192,13 @@ Destructor -> só libera o lexema copiado. Não libera o `Token` em si, porque e
 | Posse do lexema | `Token` guarda cópia própria (aloca e copia), não ponteiro para o texto original do arquivo fonte. | Parser converte token em nó de AST e descarta o token logo em seguida, não precisa se preocupar se o buffer do arquivo original ainda existe. Custa uma alocação a mais por token, evita lidar com substring sem terminador nulo apontando para o meio do arquivo. |
 | Lexer sob demanda, não lista pronta | `lexer_next_token` devolve um token de cada vez, quando o parser pede, não gera lista completa de token antes de começar a parsear. | Mesmo jeito que o parser-expressoes-infixa já funciona na prática (parser recursivo descendente pedindo o próximo símbolo conforme precisa). `Token` fica valor pequeno, sem `malloc` para o token em si, só para o lexema de dentro dele. |
  
+ ### Gap conhecido
+ 
+`token_create` devolve `Token` por valor, não por ponteiro (decisão acima) -> diferente das constructors de `AstNode*` no `ast.c`, que devolvem `NULL` quando `malloc`/`dup_string` falha. Não tem "valor nulo" equivalente para um `Token` por valor: se `dup_string(lexeme)` falhar por falta de memória, o `Token` volta mesmo assim, só que com `lexeme == NULL` silenciosamente, sem sinalizar que aquilo foi uma falha, indistinguível de um cenário que nem devia existir (`Token` sempre recebe um lexeme de verdade, nunca `NULL` de propósito).
+ 
+Não resolvido ainda, porque quem chama `token_create` é o `lexer.c`, que não existe. Fica em aberto até lá. Possível saída: o lexer detectar `token.lexeme == NULL` depois de criar e devolver um `TOKEN_ERROR` no lugar, mas isso é decisão de quando o lexer for escrito, não antes.
+ 
+## util.h / util.c
+ 
+Utilitário pequeno compartilhado entre partes diferentes do projeto -> hoje só `dup_string`. Nasceu quando essa função apareceu duplicada em `ast.c` e `token.c` ao mesmo tempo (as duas precisam copiar string do mesmo jeito). Antes da segunda duplicação, cada `.c` tinha a própria cópia, duplicar uma função de 6 linhas uma vez não justificava criar arquivo novo; na segunda vez, passou a valer a pena.
+ 

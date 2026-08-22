@@ -1,24 +1,9 @@
 #include <caldor/ast.h>
+#include <caldor/util.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/*
-dup_string -> aloca espaço novo e copia o texto para dentro.
-dup_string(NULL) devolve NULL direto, sem tentar alocar nada. Isso é usado de propósito em vários lugares abaixo 
-para tratar campo opcional (tipo type_name de let_decl) sem precisar de if separado toda vez 
-(só chama dup_string mesmo achando que pode ser NULL).
-*/
-static char* dup_string(const char* s) {
-	if (!s) return NULL;
-
-	size_t len = strlen(s) + 1;
-	char* copy = malloc(len);
-	if (copy) memcpy(copy, s, len);
-
-	return copy;
-}
 
 /*
 Constructors.
@@ -70,7 +55,7 @@ AstNode* ast_new_literal_string(int line, const char* value) {
 
 	node->kind = AST_LITERAL_STRING;
 	node->line = line;
-	node->as.string_value = value;
+	node->as.string_value = dup_string(value);
 	if (!node->as.string_value) {
 		free(node);
 
